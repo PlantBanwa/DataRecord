@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shift Management</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+<style>
+  body{font-family:'Prompt',sans-serif}
+  .elev{box-shadow:0 1px 2px rgba(0,0,0,.06),0 4px 12px rgba(0,0,0,.08)}
+  .elev-h:hover{box-shadow:0 6px 20px rgba(0,0,0,.14);transform:translateY(-3px)}
+  .card{transition:all .25s cubic-bezier(.2,.8,.2,1)}
+  .page{animation:fade .3s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+  .sheet{animation:up .3s cubic-bezier(.2,.8,.2,1)}
+  @keyframes up{from{opacity:0;transform:translateY(40px) scale(.97)}to{opacity:1;transform:none}}
+  .ripple{position:relative;overflow:hidden}
+  .ripple::after{content:'';position:absolute;inset:0;background:radial-gradient(circle,rgba(255,255,255,.5) 10%,transparent 11%);
+    background-size:1000%;background-position:50%;opacity:0;transition:.5s}
+  .ripple:active::after{background-size:0;opacity:1;transition:0s}
+</style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+
+<header class="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-slate-200">
+  <div class="max-w-5xl mx-auto px-4 h-16 flex items-center gap-3">
+    <button id="backBtn" onclick="goBack()" class="hidden w-10 h-10 rounded-full hover:bg-slate-100 grid place-items-center">
+      <span class="material-icons-round text-slate-700">arrow_back</span>
+    </button>
+    <div class="flex-1">
+      <h1 id="title" class="text-lg font-semibold text-slate-800">Shift Management</h1>
+      <p id="subtitle" class="text-xs text-slate-500">เลือกกะการทำงาน</p>
+    </div>
+    <span class="material-icons-round text-slate-400">account_circle</span>
+  </div>
+  <div id="crumb" class="max-w-5xl mx-auto px-4 pb-2 text-xs text-slate-500 hidden"></div>
+</header>
+
+<main class="max-w-5xl mx-auto px-4 py-6"><div id="view"></div></main>
+
+<!-- MODAL -->
+<div id="modal" class="fixed inset-0 z-50 hidden">
+  <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="closeForm()"></div>
+  <div class="sheet relative mx-auto my-4 sm:my-10 w-[96%] max-w-3xl h-[92vh] sm:h-[85vh] bg-white rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+    <div class="flex items-center gap-3 px-5 h-16 border-b border-slate-100 shrink-0">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 grid place-items-center shrink-0">
+        <span id="mIcon" class="material-icons-round text-white text-xl">air</span>
+      </div>
+      <div class="flex-1 min-w-0">
+        <p id="mTitle" class="font-semibold text-slate-800 truncate">-</p>
+        <p class="text-xs text-slate-500">แบบฟอร์มบันทึกข้อมูล</p>
+      </div>
+      <a id="mOpen" href="#" target="_blank" rel="noopener"
+         class="w-10 h-10 rounded-full hover:bg-slate-100 grid place-items-center" title="เปิดในแท็บใหม่">
+        <span class="material-icons-round text-slate-500 text-xl">open_in_new</span>
+      </a>
+      <button onclick="closeForm()" class="w-10 h-10 rounded-full hover:bg-slate-100 grid place-items-center">
+        <span class="material-icons-round text-slate-600">close</span>
+      </button>
+    </div>
+    <div class="flex-1 relative bg-slate-50">
+      <div id="mLoad" class="absolute inset-0 grid place-items-center text-slate-400 text-sm gap-2">
+        <span class="material-icons-round animate-spin">progress_activity</span> กำลังโหลดฟอร์ม...
+      </div>
+      <iframe id="mFrame" class="w-full h-full border-0 relative"
+        onload="document.getElementById('mLoad').style.display='none'"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= HELPER ================= */
+const F = id => `https://docs.google.com/forms/d/e/${id}/viewform?embedded=true`;
+
+/* ================= RO — เฉพาะ N-Shift ================= */
+const RO = {
+  id:"ro", name:"RO", icon:"water_drop", desc:"ระบบน้ำ RO — ผลิต / จ่ายน้ำ",
+  items:[
+    {n:"RO SYSTEM",                s:"Running", t:"ok",   url:F("1FAIpQLSdzD8PoNxx6mFuBMnJKlrLa4DzeO3tsWNulgojBGmQ5U5vSaA")},
+    {n:"Ro Water Demand & Supply", s:"Monitor", t:"warn", url:F("1FAIpQLSeEpza-wY45zR-P6InWqNbo_QxObIb_zhjiEozEPTRVa-yg9A")}
+  ]
+};
+
+/* ================= เครื่องจักร (ใช้ทั้ง M และ N) ================= */
+const MACHINE = {
+  id:"mc", name:"เครื่องจักร", icon:"precision_manufacturing", desc:"ความเย็น / สารเคมี / อุณหภูมิ Air Com",
+  items:[
+    {n:"CHEMICAL COOLING 6",     s:"Running", t:"ok",   url:F("1FAIpQLSc29IhCgPKZrNqyJLoGdD6WsFgfmgx0QX0n5WMLkMUeuX5uDg")},
+    {n:"AC 9 Cold water",        s:"Running", t:"ok",   url:F("1FAIpQLScRpFiLCkQwzLhdV1wHIwg_yiBC2KwjP_xw-XGpqImVm9Q_BA")},
+    {n:"AC RM.2 cold water",     s:"Running", t:"ok",   url:F("1FAIpQLSeXtXMu4mAdWwu-BnTG1yuFETGBwubM_c-zLC5MiMqBaAWJng")},
+    {n:"AC RM.1 cold water",     s:"Running", t:"ok",   url:F("1FAIpQLSdWIG6XUI1JpTRz8cZdXdSbrZtUusCPA-Ebe6WXYWeCneklyw")},
+    {n:"CT_6 , Status",          s:"Standby", t:"warn", url:F("1FAIpQLSezrIWZ9-qK-uFWeQFvwRPK7gOo8yehGPrtanpyd2HgsirJGw")},
+    {n:"CHEMICAL RECYCLE Water", s:"Running", t:"ok",   url:F("1FAIpQLSeiuugK-op9BpTZtRP88yKK9qmc1UwcW0imdfT2F0BL-fZHeA")},
+    /* ===== เพิ่มใหม่ ===== */
+    {n:"AIR COM TEMP 1",         s:"Normal",  t:"ok",   url:F("1FAIpQLSd6m7RGpCLhq5krrrm1Cfu5tJ2v4SXA6iMuV1B9LRxGFXlA4Q")},
+    {n:"AIR COM TEMP 2",         s:"Normal",  t:"ok",   url:F("1FAIpQLSczBarIG6gg-JgXM267k5PN0ogjSkMHSOSrzhD14dvOwDLWnQ")}
+  ]
+};
+
+/* ================= AIR COM (ใช้ทั้ง M และ N) ================= */
+const AC_FORMS = {
+  AC1:"1FAIpQLSeX2-mT_AT_Lkdv1YvFrU5TivY7SAkuL-cJRxgghj2EOszysw",
+  AC2:"1FAIpQLSd4YM5DsDaW-HaAl5yQNc9qyoyTbTgy9SoPczdUiknfETuK7g",
+  AC3:"1FAIpQLScM-3mXGcYW9PdfwkExM2kcuTcjKsooU8GQ_0DDnjXM-1oVrQ",
+  AC4:"1FAIpQLSde9EbMYvsguMXpSpRZ96ikxcKUKrUhJugrJKMvWHG0Aeh-7g",
+  AC5:"1FAIpQLSdS-oA6zqFTwCrWLDXR2Pn6KMgImmuI_uH-MFvmmIQkuuGr_Q",
+  AC6:"1FAIpQLScXwQRLBf-EavjU3phlUTZN8SFZip_BOYahE-_OU8hbMD6KAw",
+  AC7:"1FAIpQLSe9KTIkdObX9g6KGSWU0kHlG-IfLnwaIe1HAcWNVcn4u35GgA",
+  AC8:"1FAIpQLSd7rsG3-_X8CdOegaY0oNqK1kYB1hktDkAGoByY8utKcTnhOQ",
+  AC9:"1FAIpQLScRuhyysGinyLRri3UVWsRxP95MIxqVurcC13kaAyBXojbgzQ"
+};
+const AC_STATUS = {
+  AC1:["Running","ok"],   AC2:["Running","ok"],   AC3:["Running","ok"],
+  AC4:["Standby","warn"], AC5:["Running","ok"],   AC6:["Maintenance","warn"],
+  AC7:["Running","ok"],   AC8:["Breakdown","bad"],AC9:["Standby","warn"]
+};
+const AIRCOM = {
+  id:"air", name:"Air Com", icon:"air", desc:"ระบบอัดอากาศ AC1 - AC9",
+  items: Object.keys(AC_FORMS).map(k=>({n:k,s:AC_STATUS[k][0],t:AC_STATUS[k][1],url:F(AC_FORMS[k])}))
+};
+
+/* ================= OAC (ใช้ทั้ง M และ N) ================= */
+const OAC_FORMS = {
+  OAC1:"1FAIpQLScYdmwA-R30z6wO-CimTVzr8yYaPr7uCyGzDNF95ayMJlhNiA",
+  OAC2:"1FAIpQLSdslLeP90G1UQoH-M5J2hJuRJhoeJXBMozTijh7BB8eR38Hdg",
+  OAC3:"1FAIpQLSedGRKxojclJmvxsedXpxRxLwCkrmNCj8VQfBAJ7v508nUwdg",
+  OAC4:"1FAIpQLSd3hx3ya7tmi86s67o68CbNTNbimMK9qM8cgSdTbexBeKzldw",
+  OAC5:"1FAIpQLSevS6X8GcvSlQyKBratvJ12AkheZ5oaSTx7tFfLRwNfKNFKYQ",
+  OAC6:"1FAIpQLSe2fPm7m1r-lQfoafZdRYe4KGt37gFBsy7OsAdaYt9_lZfXwg"
+};
+const OAC_STATUS = {
+  OAC1:["Running","ok"], OAC2:["Running","ok"], OAC3:["Standby","warn"],
+  OAC4:["Running","ok"], OAC5:["Maintenance","warn"], OAC6:["Running","ok"]
+};
+const OAC = {
+  id:"oac", name:"OAC", icon:"hvac", desc:"Oil-free Air Compressor OAC1 - OAC6",
+  items: Object.keys(OAC_FORMS).map(k=>({n:k,s:OAC_STATUS[k][0],t:OAC_STATUS[k][1],url:F(OAC_FORMS[k])}))
+};
+
+/* ================= AHU (ใช้ทั้ง M และ N) ================= */
+const AHU_LIST = [
+  ["AHU 1-1","Zone 1","1FAIpQLSeCV35oHRybwpWnzmXDW6eTEc5unqDK-wpKGyqqULFAB3937A","Running","ok"],
+  ["AHU 1-2","Zone 1","1FAIpQLScTFh4YxdlU7ZuaG2PuiY0IscBeC2MpPlecFta2NRpSvTCN4A","Running","ok"],
+  ["AHU 1-3","Zone 1","1FAIpQLSdxqpaDrJVwcNSj8fzbrtIygZZGOBVIrMh8FOd9JI9IWjS12g","Running","ok"],
+  ["AHU 1-4","Zone 1","1FAIpQLSegaHTUQP1hSo28oLMOscc-KVi7PQNxhAVYlINYo88NtQW_6A","Running","ok"],
+  ["AHU 1-5","Zone 1","1FAIpQLSchy-TXLjHpGw4XvsVUoPF6K4fR-eZ-nB4-jTPWsHYgnCblIg","Standby","warn"],
+  ["AHU 1-6","Zone 1","1FAIpQLSdriMvmgDAlyjJQ9esnPji_vLfQjPmMk34RImQ7ifaVLN3aoQ","Running","ok"],
+  ["AHU 2-1","Zone 2","1FAIpQLScj8SzyRQyk-YGCDnqCx_lDOeCgzZwBaa4Ms7AmpmluxA2P2Q","Running","ok"],
+  ["AHU 2-2","Zone 2","1FAIpQLSfZJk2HwD2QYZWcDr1sGMovjWHF58kbKEUIxCCib2LkKov8TQ","Running","ok"],
+  ["AHU 2-3","Zone 2","1FAIpQLSdGoKEAtl-Zm6vB_BdjGbzZoY0CzKIlGelMXb2jDkOQtWZwFA","Running","ok"],
+  ["AHU 2-4","Zone 2","1FAIpQLSeWS5kBOH8ayITfBhWzjmMJXEhYDUrhvtuOt8bSlceLVCwjog","Maintenance","warn"],
+  ["AHU 2-5","Zone 2","1FAIpQLSdX5jwLVxAHtSnHeRwG--eswZ3_J8lrS3mOlDtp3k6SCekxig","Running","ok"],
+  ["AHU 2-6","Zone 2","1FAIpQLSfSNNUb8olyA4DPElTrNnawge-iySxIfv8pFJh8mswOdOBxyA","Running","ok"],
+  ["AHU 2-7","Zone 2","1FAIpQLScGazOxrn0OqvYWlI_ZBrKqPJNjKGu6Rsp1oUYawNSlbg_0Pw","Standby","warn"],
+  ["AHU 2-8","Zone 2","1FAIpQLSdf2m3E4Fw_gIjaMwNGZuS5bbqFg8U9ggxoZrqVCnJtHjDtgw","Running","ok"],
+  ["AHU 3-1","Zone 3","1FAIpQLSe2nHoH-0gxMmTI7SSB9HP9odO2J9UfkBfAxeSoLjfi7zAdSA","Running","ok"]
+];
+const AHU = {
+  id:"ahu", name:"AHU", icon:"mode_fan", desc:"Air Handling Unit — 15 ยูนิต / 3 โซน",
+  items: AHU_LIST.map(([n,g,id,s,t])=>({n,g,s,t,url:F(id)}))
+};
+
+/* ================= EXF — เฉพาะ M-Shift ================= */
+const EXF_FORMS = {
+  EXF1:"1FAIpQLScJJW1Dklgx8_7cwlxmmif4oIV7p-WPAPdJf3asbndVHpCcdQ",
+  EXF2:"1FAIpQLSdhXkAQH3g4WwHDlnQNfdiAyHIJKBcl9kRDoZ63djHg01TMMw",
+  EXF3:"1FAIpQLSe32KoTz7y2moc2pFU39kXXUU8UpJHuOhmOpg8VcnGQonEI_A",
+  EXF4:"1FAIpQLScJ175j6sj4xy48WpyoDzpyfHdi2DMLTRiqldo1vgLK-9RZyQ",
+  EXF5:"1FAIpQLSfvRobFkW8OVGk1xGi33YG_aSpOjFTd4LiAEzl6VDVDIxNrAQ",
+  EXF6:"1FAIpQLSfIq5yvT5WiHnYZNsl89TW88nfyAf20aX7h1Uqy9clqbG7bWg",
+  EXF7:"1FAIpQLScSoT3nY4YTeC9WPhqkSjzgNat5xJdChh_2kNcRm4Oz12vxYQ",
+  EXF8:"1FAIpQLSfs2YoeVcwSZnJyMYJl6YWYPnagk03s1mmyCN7pbheTRJtQ1Q",
+  EXF9:"1FAIpQLSc5eb1oZpQvXFxuYzQ9SUStBnZ8bzDwokU5o_6tUVAF0NLToQ"
+};
+const EXF_STATUS = {
+  EXF1:["Running","ok"],   EXF2:["Running","ok"],   EXF3:["Running","ok"],
+  EXF4:["Standby","warn"], EXF5:["Running","ok"],   EXF6:["Running","ok"],
+  EXF7:["Maintenance","warn"], EXF8:["Running","ok"], EXF9:["Standby","warn"]
+};
+const EXF = {
+  id:"exf", name:"EXF", icon:"mode_fan_off", desc:"Exhaust Fan EXF1 - EXF9",
+  items: Object.keys(EXF_FORMS).map(k=>({n:k,s:EXF_STATUS[k][0],t:EXF_STATUS[k][1],url:F(EXF_FORMS[k])}))
+};
+
+/* ================= DATA ================= */
+const DATA = {
+  M: {
+    name:"M-Shift", label:"กะเช้า 08:00 - 20:00", color:"from-amber-400 to-orange-500", icon:"light_mode",
+    topics:[ MACHINE, AIRCOM, OAC, AHU, EXF ]        /* ← ไม่มี RO แล้ว */
+  },
+  N: {
+    name:"N-Shift", label:"กะดึก 20:00 - 08:00", color:"from-indigo-500 to-violet-600", icon:"dark_mode",
+    topics:[ RO, MACHINE, AIRCOM, OAC, AHU,          /* ← RO ยังอยู่ */
+      {id:"tm", name:"ทีมงาน", icon:"groups", desc:"รายชื่อพนักงานเข้ากะ",
+       items:[{n:"วิชัย มั่นคง",s:"หัวหน้ากะ",t:"ok"},{n:"ปรีชา ขยัน",s:"Operator",t:"ok"}]}
+    ]
+  }
+};
+
+const TONE={ok:"bg-emerald-50 text-emerald-700 border-emerald-200",
+            warn:"bg-amber-50 text-amber-700 border-amber-200",
+            bad:"bg-rose-50 text-rose-700 border-rose-200"};
+const DOT ={ok:"bg-emerald-500",warn:"bg-amber-500",bad:"bg-rose-500"};
+
+/* ================= STATE ================= */
+let state={level:1,shift:null,topic:null};
+const $=id=>document.getElementById(id);
+const curTopic=()=>DATA[state.shift].topics.find(x=>x.id===state.topic);
+const esc=s=>String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+
+function itemCard(i,idx){
+  const c=!!i.url;
+  return `
+  <div ${c?`onclick="openForm(${idx})"`:""}
+    class="card elev elev-h rounded-2xl p-4 bg-white border flex items-start gap-3
+    ${c?"ripple cursor-pointer border-blue-200 ring-1 ring-blue-100 hover:ring-blue-300":"border-slate-100"}">
+    <span class="w-2.5 h-2.5 rounded-full ${DOT[i.t]} shrink-0 mt-1.5"></span>
+    <div class="flex-1 min-w-0">
+      <p class="font-medium text-slate-800 leading-snug break-words">${esc(i.n)}</p>
+      <p class="text-xs mt-0.5 ${c?"text-blue-500":"text-slate-400"}">
+        ${c?"แตะเพื่อกรอกฟอร์ม":"อัปเดตล่าสุด 5 นาทีที่แล้ว"}</p>
+    </div>
+    <div class="flex items-center gap-1 shrink-0">
+      <span class="text-xs px-2.5 py-1 rounded-full border ${TONE[i.t]} whitespace-nowrap">${esc(i.s)}</span>
+      ${c?'<span class="material-icons-round text-blue-500 text-lg">edit_note</span>':''}
+    </div>
+  </div>`;
+}
+
+function render(){
+  const v=$("view"), s=DATA[state.shift], t=s?.topics.find(x=>x.id===state.topic);
+  $("backBtn").classList.toggle("hidden",state.level===1);
+  $("crumb").classList.toggle("hidden",state.level===1);
+  $("crumb").textContent = state.level===2?`หน้าแรก / ${s.name}`
+                        : state.level===3?`หน้าแรก / ${s.name} / ${t.name}` : "";
+
+  if(state.level===1){
+    $("title").textContent="Shift Management"; $("subtitle").textContent="เลือกกะการทำงาน";
+    v.innerHTML=`<div class="page grid sm:grid-cols-2 gap-5">${
+      Object.entries(DATA).map(([k,d])=>`
+      <button onclick="openShift('${k}')" class="ripple card elev elev-h text-left rounded-3xl p-7 bg-gradient-to-br ${d.color} text-white">
+        <div class="flex items-center justify-between mb-8">
+          <span class="material-icons-round text-4xl">${d.icon}</span>
+          <span class="text-xs bg-white/25 px-3 py-1 rounded-full">${d.topics.length} หัวข้อ</span>
+        </div>
+        <h2 class="text-3xl font-semibold">${d.name}</h2>
+        <p class="opacity-90 text-sm mt-1">${d.label}</p>
+        <div class="mt-6 flex items-center gap-1 text-sm font-medium">เข้าสู่กะ
+          <span class="material-icons-round text-base">arrow_forward</span></div>
+      </button>`).join("")}</div>`;
+    return;
+  }
+
+  if(state.level===2){
+    $("title").textContent=s.name; $("subtitle").textContent=s.label;
+    v.innerHTML=`<div class="page grid sm:grid-cols-2 lg:grid-cols-3 gap-4">${
+      s.topics.map(tp=>`
+      <button onclick="openTopic('${tp.id}')" class="ripple card elev elev-h text-left rounded-2xl p-5 bg-white border border-slate-100">
+        <div class="w-12 h-12 rounded-xl bg-gradient-to-br ${s.color} grid place-items-center mb-4">
+          <span class="material-icons-round text-white">${tp.icon}</span></div>
+        <h3 class="font-semibold text-slate-800">${tp.name}</h3>
+        <p class="text-xs text-slate-500 mt-1">${tp.desc}</p>
+        <div class="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
+          <span>${tp.items.length} รายการ</span>
+          <span class="material-icons-round text-base">chevron_right</span></div>
+      </button>`).join("")}</div>`;
+    return;
+  }
+
+  /* LEVEL 3 — รองรับกลุ่ม (field g) */
+  $("title").textContent=t.name; $("subtitle").textContent=`${s.name} · ${t.desc}`;
+  if(!t.items.some(i=>i.g)){
+    v.innerHTML=`<div class="page grid sm:grid-cols-2 lg:grid-cols-3 gap-3">${
+      t.items.map((i,idx)=>itemCard(i,idx)).join("")}</div>`;
+    return;
+  }
+  const groups={};
+  t.items.forEach((i,idx)=>{ (groups[i.g] ||= []).push({...i,idx}); });
+  v.innerHTML=`<div class="page space-y-7">${
+    Object.entries(groups).map(([g,arr])=>`
+    <section>
+      <div class="flex items-center gap-2 mb-3">
+        <h4 class="text-sm font-semibold text-slate-700">${esc(g)}</h4>
+        <span class="text-xs text-slate-400 bg-slate-200/70 px-2 py-0.5 rounded-full">${arr.length}</span>
+        <div class="flex-1 h-px bg-slate-200"></div>
+      </div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        ${arr.map(i=>itemCard(i,i.idx)).join("")}
+      </div>
+    </section>`).join("")}</div>`;
+}
+
+/* ================= NAV ================= */
+function openShift(k){state.shift=k;state.level=2;render();scrollTo(0,0)}
+function openTopic(id){state.topic=id;state.level=3;render();scrollTo(0,0)}
+function goBack(){if(!$("modal").classList.contains("hidden"))return closeForm();
+  state.level=Math.max(1,state.level-1);render();scrollTo(0,0)}
+
+/* ================= MODAL ================= */
+function openForm(idx){
+  const t=curTopic(), item=t.items[idx];
+  if(!item.url)return;
+  $("mIcon").textContent=t.icon;
+  $("mTitle").textContent=`${item.n} — ${DATA[state.shift].name}`;
+  $("mOpen").href=item.url.replace("?embedded=true","");
+  $("mLoad").style.display="grid";
+  $("mFrame").src=item.url;
+  $("modal").classList.remove("hidden");
+  document.body.style.overflow="hidden";
+}
+function closeForm(){
+  $("modal").classList.add("hidden");
+  $("mFrame").src="about:blank";
+  document.body.style.overflow="";
+}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeForm()});
+
+render();
+</script>
+</body>
+</html>
